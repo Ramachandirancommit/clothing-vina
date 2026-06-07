@@ -30,7 +30,14 @@ class EventEmitter {
 export const eventEmitter = new EventEmitter();
 
 export const EVENTS = {
+  // Product events
   PRODUCT_ADDED: "PRODUCT_ADDED",
+
+  // Cart events
   CART_UPDATED: "CART_UPDATED",
-  CART_COUNT_UPDATED: "CART_COUNT_UPDATED", // Add this
+  CART_COUNT_UPDATED: "CART_COUNT_UPDATED",
+
+  // Wishlist events
+  WISHLIST_UPDATED: "WISHLIST_UPDATED",
+  WISHLIST_COUNT_UPDATED: "WISHLIST_COUNT_UPDATED",
 };
