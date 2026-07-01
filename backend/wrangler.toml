@@ -1,0 +1,19 @@
+# D:\Apps-live\vina-clothing\backend\wrangler.toml
+
+name = "api"
+main = "worker.js"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vinatrix-db"
+database_id = "f7ec6131-0607-4b3f-93cf-f6292c1b17bd"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "vinatrix-product-images"
+
+
+
+[vars]
+RAZORPAY_KEY_ID = "rzp_live_SyeCkmvegychiI"
+RAZORPAY_KEY_SECRET = "NoLyr0XmAPme3c4REhDTB5Ju"
