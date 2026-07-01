@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -52,18 +53,16 @@ export default function WishlistScreen() {
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  // Helper function to get clean image URL (SAME AS CART.TSX)
+  // Helper function to get clean image URL
   const getImageUrl = (imagePath: string | undefined | null): string | null => {
     if (!imagePath || imagePath === null || imagePath === undefined) {
       return null;
     }
 
-    // If it's already a full URL
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
       return imagePath;
     }
 
-    // Remove duplicate slashes and ensure proper format
     let cleanPath = imagePath;
     if (cleanPath.startsWith("/")) {
       cleanPath = cleanPath;
@@ -73,105 +72,258 @@ export default function WishlistScreen() {
       cleanPath = `/${cleanPath}`;
     }
 
-    // Return full URL
     return `${BASE_URL}${cleanPath}`;
   };
 
-  // Get device info
+  // =========================
+  // GET DEVICE INFO
+  // =========================
   const getDeviceInfo = async () => {
     try {
+      if (Platform.OS === "web") {
+        const userAgent = navigator.userAgent;
+        const screenResolution = `${window.screen.width}x${window.screen.height}`;
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        let ipAddress = "web_client";
+        try {
+          const ipResponse = await fetch("https://api.ipify.org?format=json");
+          const ipData = await ipResponse.json();
+          if (ipData.ip) {
+            ipAddress = ipData.ip;
+          }
+        } catch (ipError) {
+          console.log("IP fetch failed, using fallback");
+        }
+
+        const deviceFingerprint = `WEB_${userAgent.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}_${screenResolution}_${timezone}`;
+
+        return {
+          deviceName: deviceFingerprint.substring(0, 50),
+          ipAddress: ipAddress,
+        };
+      }
+
       const deviceName = Device.deviceName || "unknown";
       const ipAddress = await Network.getIpAddressAsync();
-      return { deviceName, ipAddress };
+      return {
+        deviceName: deviceName,
+        ipAddress: ipAddress,
+      };
     } catch (error) {
-      return { deviceName: "unknown", ipAddress: "0.0.0.0" };
+      console.error("Error getting device info:", error);
+      return {
+        deviceName: "unknown_device",
+        ipAddress: "0.0.0.0",
+      };
     }
   };
 
-  // Get or create user from backend
+  // =========================
+  // GET OR CREATE USER
+  // =========================
   const getOrCreateUser = async (): Promise<string | null> => {
     try {
-      const { deviceName, ipAddress } = await getDeviceInfo();
-      const deviceId = `${deviceName}_${Device.osBuildId || Date.now()}`;
+      let userId = await AsyncStorage.getItem("app_user_id");
+
+      if (userId) {
+        console.log("✅ Found existing user ID:", userId);
+        return userId;
+      }
+
+      const deviceInfo = await getDeviceInfo();
+      const deviceId =
+        Platform.OS === "web"
+          ? deviceInfo.deviceName
+          : `${deviceInfo.deviceName}_${Device.osBuildId || Date.now()}`;
+
+      console.log("📡 Creating new user with deviceId:", deviceId);
 
       const response = await fetch(`${BASE_URL}/api/user/get-or-create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          device_id: deviceId,
-          ip_address: ipAddress,
+          cust_deviceid: deviceId,
+          ip_address: deviceInfo.ipAddress,
         }),
       });
 
       const data = await response.json();
-      if (data.success) {
-        await AsyncStorage.setItem("app_user_id", data.user.user_uuid);
-        return data.user.user_uuid;
+      console.log("📥 User API Response:", JSON.stringify(data, null, 2));
+
+      if (data.success && data.user) {
+        const userId = data.user.user_uuid || data.user.cust_id;
+        await AsyncStorage.setItem("app_user_id", userId);
+        console.log("✅ Created new user with ID:", userId);
+        return userId;
+      } else {
+        console.error("❌ Failed to create user:", data);
       }
     } catch (error) {
-      console.error("Error getting/creating user:", error);
+      console.error("❌ Error getting/creating user:", error);
     }
     return null;
   };
 
-  // Fetch wishlist from API
-  const fetchWishlist = useCallback(async () => {
+  // =========================
+  // SAVE WISHLIST TO STORAGE
+  // =========================
+  const saveWishlistToStorage = async (items: WishlistItem[]) => {
     try {
-      if (!custId) return;
-
-      console.log("fetchWishlist called");
-
-      const url = `${WISHLIST_URL}?cust_id=${custId}`;
-      console.log("📡 Fetching URL:", url);
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      console.log("📥 Wishlist API Response:", JSON.stringify(data, null, 2));
-
-      if (data.success && data.items) {
-        console.log("✅ Items count:", data.items.length);
-        if (data.items.length > 0) {
-          console.log("📦 First item structure:", data.items[0]);
-        }
-        setWishlistItems(data.items);
-        // Reset image errors when new items load
-        setImageErrors({});
-      } else {
-        console.log("⚠️ API returned success false or no items:", data.error);
-        setWishlistItems([]);
-      }
+      await AsyncStorage.setItem("wishlist_items", JSON.stringify(items));
+      await AsyncStorage.setItem("wishlist_count", String(items.length));
+      await AsyncStorage.setItem("wishlist_last_fetch", String(Date.now()));
+      console.log(`💾 Saved ${items.length} items to storage`);
     } catch (error) {
-      console.error("❌ Error fetching wishlist:", error);
-      setWishlistItems([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      console.error("Error saving wishlist to storage:", error);
     }
-  }, [custId]);
+  };
 
+  // =========================
+  // LOAD WISHLIST FROM STORAGE
+  // =========================
+  const loadWishlistFromStorage = async (): Promise<WishlistItem[] | null> => {
+    try {
+      const stored = await AsyncStorage.getItem("wishlist_items");
+      if (stored) {
+        const items = JSON.parse(stored);
+        console.log(`📦 Loaded ${items.length} items from storage`);
+        return items;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error loading wishlist from storage:", error);
+      return null;
+    }
+  };
+
+  // =========================
+  // FETCH WISHLIST - WITH CACHE
+  // =========================
+  const fetchWishlist = useCallback(
+    async (forceRefresh: boolean = false) => {
+      try {
+        if (!custId) {
+          console.log("⚠️ No custId available, waiting for user creation...");
+          return;
+        }
+
+        // Try to load from storage first (unless force refresh)
+        if (!forceRefresh) {
+          const cachedItems = await loadWishlistFromStorage();
+          if (cachedItems && cachedItems.length > 0) {
+            setWishlistItems(cachedItems);
+            setLoading(false);
+            setRefreshing(false);
+            console.log(
+              `📦 Using cached wishlist: ${cachedItems.length} items`,
+            );
+
+            // Still fetch in background to update
+            fetchWishlist(true);
+            return;
+          }
+        }
+
+        console.log(`📡 Fetching wishlist for custId: ${custId}`);
+        const url = `${WISHLIST_URL}?cust_id=${encodeURIComponent(custId)}`;
+        console.log("📡 Fetching URL:", url);
+
+        const response = await fetch(url, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await response.json();
+        console.log("📥 Wishlist API Response:", JSON.stringify(data, null, 2));
+
+        if (data.success && data.items) {
+          console.log(`✅ Items count: ${data.items.length}`);
+          setWishlistItems(data.items);
+          setImageErrors({});
+
+          // Save to storage
+          await saveWishlistToStorage(data.items);
+
+          // Emit event to update badge count
+          eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED, data.items.length);
+        } else {
+          console.log("⚠️ API returned no items:", data.error || data.message);
+          setWishlistItems([]);
+          await saveWishlistToStorage([]);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching wishlist:", error);
+
+        // Try to load from storage as fallback
+        const cachedItems = await loadWishlistFromStorage();
+        if (cachedItems && cachedItems.length > 0) {
+          setWishlistItems(cachedItems);
+          console.log(
+            `📦 Fallback to cached wishlist: ${cachedItems.length} items`,
+          );
+        } else {
+          setWishlistItems([]);
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [custId],
+  );
+
+  // =========================
+  // INIT - Get User ID and Load Data
+  // =========================
   useEffect(() => {
     const init = async () => {
-      const userId = await getOrCreateUser();
-      if (userId) {
-        setCustId(userId);
-      } else {
+      try {
+        // First try to load from storage immediately
+        const cachedItems = await loadWishlistFromStorage();
+        if (cachedItems && cachedItems.length > 0) {
+          setWishlistItems(cachedItems);
+          console.log(
+            `📦 Initial load from storage: ${cachedItems.length} items`,
+          );
+        }
+
+        const userId = await getOrCreateUser();
+        if (userId) {
+          setCustId(userId);
+          console.log("✅ User ID set:", userId);
+        } else {
+          console.error("❌ Failed to get/create user");
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("❌ Init error:", error);
         setLoading(false);
       }
     };
     init();
   }, []);
 
+  // =========================
+  // FETCH when custId changes
+  // =========================
   useEffect(() => {
     if (custId) {
-      fetchWishlist();
+      console.log("🔄 custId changed, fetching wishlist...");
+      fetchWishlist(true); // Force refresh from API
     }
   }, [custId, fetchWishlist]);
 
+  // =========================
   // Listen for wishlist updated events
+  // =========================
   useEffect(() => {
     const handleWishlistUpdated = () => {
-      fetchWishlist();
+      console.log("🔄 Wishlist updated event received, refetching...");
+      if (custId) {
+        fetchWishlist(true); // Force refresh
+      }
     };
 
     eventEmitter.on(EVENTS.WISHLIST_UPDATED, handleWishlistUpdated);
@@ -179,14 +331,23 @@ export default function WishlistScreen() {
     return () => {
       eventEmitter.off(EVENTS.WISHLIST_UPDATED, handleWishlistUpdated);
     };
-  }, [fetchWishlist]);
+  }, [custId, fetchWishlist]);
 
+  // =========================
+  // PULL TO REFRESH
+  // =========================
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchWishlist();
-  }, [fetchWishlist]);
+    if (custId) {
+      fetchWishlist(true); // Force refresh
+    } else {
+      setRefreshing(false);
+    }
+  }, [custId, fetchWishlist]);
 
-  // Remove item from wishlist
+  // =========================
+  // REMOVE FROM WISHLIST
+  // =========================
   const removeFromWishlist = (productId: number, productName: string) => {
     Alert.alert(
       "Remove from Wishlist",
@@ -198,18 +359,27 @@ export default function WishlistScreen() {
           onPress: async () => {
             try {
               const userId = await getOrCreateUser();
+              if (!userId) {
+                Alert.alert("Error", "User not found");
+                return;
+              }
+
+              console.log(`🗑️ Removing product ${productId} from wishlist...`);
+
               const response = await fetch(`${WISHLIST_URL}/remove`, {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   cust_id: userId,
-                  productId: productId,
+                  product_id: productId,
                 }),
               });
 
               const data = await response.json();
+              console.log("📤 Remove response:", data);
+
               if (data.success) {
-                fetchWishlist();
+                await fetchWishlist(true); // Force refresh
                 eventEmitter.emit(EVENTS.WISHLIST_UPDATED);
                 eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED);
                 Alert.alert("Success", "Item removed from wishlist");
@@ -227,12 +397,22 @@ export default function WishlistScreen() {
     );
   };
 
-  // Add item to cart
+  // =========================
+  // ADD TO CART
+  // =========================
   const addToCart = async (item: WishlistItem) => {
     try {
       const userId = await getOrCreateUser();
-      const { ipAddress, deviceName } = await getDeviceInfo();
+      if (!userId) {
+        Alert.alert("Error", "User not found");
+        return;
+      }
+
+      const deviceInfo = await getDeviceInfo();
+      const { ipAddress, deviceName } = deviceInfo;
       const itemPrice = getPriceAsNumber(item.price);
+
+      console.log(`🛒 Adding ${item.product_name} to cart...`);
 
       const response = await fetch(`${CART_URL}/add`, {
         method: "POST",
@@ -240,7 +420,7 @@ export default function WishlistScreen() {
         body: JSON.stringify({
           cust_id: userId,
           ip_address: ipAddress,
-          device_id: deviceName,
+          cust_deviceid: deviceName,
           productId: item.product_id,
           productName: item.product_name,
           productCategory: item.product_category,
@@ -250,6 +430,8 @@ export default function WishlistScreen() {
       });
 
       const data = await response.json();
+      console.log("📤 Add to cart response:", data);
+
       if (data.success) {
         eventEmitter.emit(EVENTS.CART_UPDATED);
         eventEmitter.emit(EVENTS.CART_COUNT_UPDATED);
@@ -263,12 +445,16 @@ export default function WishlistScreen() {
     }
   };
 
-  // View product details
+  // =========================
+  // VIEW PRODUCT DETAILS
+  // =========================
   const viewProduct = (productId: number) => {
     router.push(`/product/${productId}` as any);
   };
 
-  // Clear entire wishlist
+  // =========================
+  // CLEAR WISHLIST
+  // =========================
   const clearWishlist = () => {
     if (wishlistItems.length === 0) return;
 
@@ -282,6 +468,11 @@ export default function WishlistScreen() {
           onPress: async () => {
             try {
               const userId = await getOrCreateUser();
+              if (!userId) {
+                Alert.alert("Error", "User not found");
+                return;
+              }
+
               const response = await fetch(`${WISHLIST_URL}/clear`, {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
@@ -290,7 +481,8 @@ export default function WishlistScreen() {
 
               const data = await response.json();
               if (data.success) {
-                fetchWishlist();
+                await saveWishlistToStorage([]);
+                setWishlistItems([]);
                 eventEmitter.emit(EVENTS.WISHLIST_UPDATED);
                 eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED);
                 Alert.alert("Success", "Wishlist cleared");
@@ -378,7 +570,10 @@ export default function WishlistScreen() {
                     isDark && styles.darkWishlistItem,
                   ]}
                 >
-                  <View style={styles.itemImageContainer}>
+                  <TouchableOpacity
+                    style={styles.itemImageContainer}
+                    onPress={() => viewProduct(item.product_id)}
+                  >
                     {imageUrl && !hasImageError ? (
                       <Image
                         source={{ uri: imageUrl }}
@@ -399,12 +594,18 @@ export default function WishlistScreen() {
                         <Feather name="heart" size={30} color="#ccc" />
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
 
                   <View style={styles.itemInfo}>
-                    <Text style={[styles.itemName, isDark && styles.darkText]}>
-                      {item.product_name}
-                    </Text>
+                    <TouchableOpacity
+                      onPress={() => viewProduct(item.product_id)}
+                    >
+                      <Text
+                        style={[styles.itemName, isDark && styles.darkText]}
+                      >
+                        {item.product_name}
+                      </Text>
+                    </TouchableOpacity>
                     <Text
                       style={[
                         styles.itemCategory,

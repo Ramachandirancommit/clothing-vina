@@ -1,19 +1,18 @@
 import { AntDesign, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
-
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const BASE_URL = "https://api.vinatrix-api.workers.dev";
@@ -23,7 +22,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
   const [formData, setFormData] = useState({
     product_category: "",
     product_name: "",
-    size: "", // Added size field
+    size: "",
     price: "",
     quantity: "1",
     description: "",
@@ -46,7 +45,30 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
 
   const sizes = ["S", "M", "L", "XL", "XXL", "XXXL"];
 
-  const pickImage = async () => {
+  // Web: Create file input
+  const pickImageWeb = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result);
+          setFormData({
+            ...formData,
+            product_image: file,
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  // Mobile: Pick image from gallery
+  const pickImageMobile = async () => {
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -77,11 +99,12 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
       }
     } catch (error) {
       console.error("❌ Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image. Please try again.");
+      Alert.alert("Error", "Failed to pick image");
     }
   };
 
-  const takePhoto = async () => {
+  // Mobile: Take photo with camera
+  const takePhotoMobile = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -106,21 +129,26 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
       }
     } catch (error) {
       console.error("❌ Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo. Please try again.");
+      Alert.alert("Error", "Failed to take photo");
     }
   };
 
+  // Platform-specific image picker
   const showImageOptions = () => {
-    Alert.alert(
-      "Add Product Image",
-      "Choose an option",
-      [
-        { text: "Take Photo", onPress: takePhoto },
-        { text: "Choose from Gallery", onPress: pickImage },
-        { text: "Cancel", style: "cancel" },
-      ],
-      { cancelable: true },
-    );
+    if (Platform.OS === "web") {
+      pickImageWeb();
+    } else {
+      Alert.alert(
+        "Add Product Image",
+        "Choose an option",
+        [
+          { text: "Take Photo", onPress: takePhotoMobile },
+          { text: "Choose from Gallery", onPress: pickImageMobile },
+          { text: "Cancel", style: "cancel" },
+        ],
+        { cancelable: true },
+      );
+    }
   };
 
   const incrementQuantity = () => {
@@ -142,26 +170,23 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
   };
 
   const submitProduct = async () => {
+    // Validation
     if (!formData.product_category) {
       Alert.alert("Error", "Please select a category");
       return;
     }
-
     if (!formData.product_name.trim()) {
       Alert.alert("Error", "Please enter product name");
       return;
     }
-
     if (!formData.size) {
       Alert.alert("Error", "Please select a size");
       return;
     }
-
     if (!formData.price || parseFloat(formData.price) <= 0) {
       Alert.alert("Error", "Please enter valid price");
       return;
     }
-
     if (!formData.product_image) {
       Alert.alert("Error", "Please add product image");
       return;
@@ -171,57 +196,55 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
 
     try {
       const apiFormData = new FormData();
-
       apiFormData.append("product_category", formData.product_category);
       apiFormData.append("product_name", formData.product_name);
-      apiFormData.append("size", formData.size); // Added size to form data
+      apiFormData.append("size", formData.size);
       apiFormData.append("price", formData.price);
       apiFormData.append("quantity", formData.quantity);
       apiFormData.append("description", formData.description);
 
-      const imageUri = formData.product_image.uri;
-      const filename = imageUri.split("/").pop() || "product.jpg";
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : "image/jpeg";
-
-      apiFormData.append("product_image", {
-        uri: Platform.OS === "ios" ? imageUri.replace("file://", "") : imageUri,
-        type: type,
-        name: filename,
-      });
+      // Handle image for web vs mobile
+      if (Platform.OS === "web") {
+        const file = formData.product_image;
+        apiFormData.append("product_image", file);
+      } else {
+        const imageUri = formData.product_image.uri;
+        const filename = imageUri.split("/").pop() || "product.jpg";
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : "image/jpeg";
+        apiFormData.append("product_image", {
+          uri:
+            Platform.OS === "ios" ? imageUri.replace("file://", "") : imageUri,
+          type: type,
+          name: filename,
+        });
+      }
 
       console.log("📤 Uploading product...");
 
       const response = await fetch(API_URL, {
         method: "POST",
         body: apiFormData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
       });
 
       const data = await response.json();
       console.log("✅ Server Response:", data);
 
-      if (response.ok) {
-        // RESET FORM
+      if (response.ok && data.success) {
+        // Reset form
         setFormData({
           product_category: "",
           product_name: "",
-          size: "", // Reset size
+          size: "",
           price: "",
           quantity: "1",
           description: "",
           product_image: null,
         });
-
         setImagePreview(null);
         setLoading(false);
-
-        // Close modal FIRST
         onClose();
 
-        // Show success alert and refresh ONLY when OK is clicked
         Alert.alert(
           "Success",
           "Product added successfully!",
@@ -229,7 +252,6 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
             {
               text: "OK",
               onPress: async () => {
-                // Refresh ONLY when user clicks OK
                 if (onProductAdded) {
                   await onProductAdded();
                 }
@@ -243,7 +265,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
         Alert.alert("Error", data.error || "Failed to add product");
       }
     } catch (error) {
-      console.error("❌ Error submitting product:", error);
+      console.error("❌ Error:", error);
       setLoading(false);
       Alert.alert("Error", "Network error. Please check your connection");
     }
@@ -266,6 +288,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Category */}
             <Text style={styles.label}>Product Category *</Text>
             <View style={styles.categoryContainer}>
               {categories.map((cat) => (
@@ -277,10 +300,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
                       styles.categoryButtonActive,
                   ]}
                   onPress={() =>
-                    setFormData({
-                      ...formData,
-                      product_category: cat,
-                    })
+                    setFormData({ ...formData, product_category: cat })
                   }
                 >
                   <Text
@@ -296,19 +316,18 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
               ))}
             </View>
 
+            {/* Product Name */}
             <Text style={styles.label}>Product Name *</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter product name"
               value={formData.product_name}
               onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  product_name: text,
-                })
+                setFormData({ ...formData, product_name: text })
               }
             />
 
+            {/* Size */}
             <Text style={styles.label}>Size *</Text>
             <View style={styles.sizeContainer}>
               {sizes.map((s) => (
@@ -318,12 +337,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
                     styles.sizeButton,
                     formData.size === s && styles.sizeButtonActive,
                   ]}
-                  onPress={() =>
-                    setFormData({
-                      ...formData,
-                      size: s,
-                    })
-                  }
+                  onPress={() => setFormData({ ...formData, size: s })}
                 >
                   <Text
                     style={[
@@ -337,20 +351,17 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
               ))}
             </View>
 
+            {/* Price */}
             <Text style={styles.label}>Price (in Rs) *</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter price"
               keyboardType="numeric"
               value={formData.price}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  price: text,
-                })
-              }
+              onChangeText={(text) => setFormData({ ...formData, price: text })}
             />
 
+            {/* Quantity */}
             <Text style={styles.label}>Quantity *</Text>
             <View style={styles.quantityContainer}>
               <TouchableOpacity
@@ -368,6 +379,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
               </TouchableOpacity>
             </View>
 
+            {/* Product Image */}
             <Text style={styles.label}>Product Image *</Text>
             <TouchableOpacity
               style={styles.imageUploadButton}
@@ -388,10 +400,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
                 <TouchableOpacity
                   style={styles.removeImageButton}
                   onPress={() => {
-                    setFormData({
-                      ...formData,
-                      product_image: null,
-                    });
+                    setFormData({ ...formData, product_image: null });
                     setImagePreview(null);
                   }}
                 >
@@ -400,6 +409,7 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
               </View>
             )}
 
+            {/* Description */}
             <Text style={styles.label}>Description</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -408,13 +418,11 @@ const SellProductModal = ({ visible, onClose, onProductAdded }) => {
               numberOfLines={4}
               value={formData.description}
               onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  description: text,
-                })
+                setFormData({ ...formData, description: text })
               }
             />
 
+            {/* Submit Button */}
             <TouchableOpacity
               style={styles.submitButton}
               onPress={submitProduct}

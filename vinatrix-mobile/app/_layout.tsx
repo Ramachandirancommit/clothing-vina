@@ -5,17 +5,15 @@ import {
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { Platform } from "react-native";
 import "react-native-reanimated";
+import { loadFontAwesomeForWeb } from "../../vinatrix-mobile/utils/webFontLoader";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
-// Add Font Awesome for web platform (runs once at app start)
-if (Platform.OS === "web" && typeof document !== "undefined") {
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href =
-    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css";
-  document.head.appendChild(link);
+// Load Font Awesome for web platform
+if (Platform.OS === "web") {
+  loadFontAwesomeForWeb();
 }
 
 export const unstable_settings = {
@@ -23,6 +21,13 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  // Pre-load on web
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      loadFontAwesomeForWeb();
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <RootLayoutContent />

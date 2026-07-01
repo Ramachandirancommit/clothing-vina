@@ -5,15 +5,15 @@ import * as Device from "expo-device";
 import * as Network from "expo-network";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { ThemedText } from "../../components/themed-text";
@@ -164,8 +164,7 @@ export default function TrackOrdersScreen() {
 
       const response = await fetch(`${ORDERS_URL}/user/${cust_id}`, {
         headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
+          "Content-Type": "application/json",
         },
       });
 
