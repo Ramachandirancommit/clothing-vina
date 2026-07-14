@@ -1,7 +1,7 @@
-// app/index.tsx
+// app/index.tsx - FIXED VERSION
 
 import { useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -28,11 +28,18 @@ export default function HomeScreen() {
   const [version, setVersion] = useState(0);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
+  // FIXED: Use the hook with proper options
   const {
     products,
     loading: productsLoading,
-    fetchProducts,
-  } = useProducts("trending");
+    refreshProducts, // CHANGED: Use refreshProducts instead of fetchProducts
+    error: productsError, // Added error handling
+  } = useProducts({
+    sortBy: "popularity",
+    sortOrder: "desc",
+    limit: 20,
+  });
+
   const {
     wishlist,
     wishlistCount,
@@ -49,18 +56,34 @@ export default function HomeScreen() {
 
   const loading = productsLoading || wishlistLoading;
 
+  // FIXED: Use refreshProducts instead of fetchProducts
   const onRefresh = useCallback(async () => {
+    console.log("🔄 HomeScreen - Pull to refresh");
     setRefreshing(true);
-    await Promise.all([fetchProducts(), fetchWishlist(true)]);
-    setRefreshing(false);
-  }, [fetchProducts, fetchWishlist, setRefreshing]);
+    try {
+      await Promise.all([refreshProducts(), fetchWishlist(true)]);
+      console.log("✅ HomeScreen - Refresh completed");
+    } catch (error) {
+      console.error("❌ HomeScreen - Refresh failed:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshProducts, fetchWishlist, setRefreshing]);
 
+  // FIXED: Use refreshProducts instead of fetchProducts
   const handleProductAdded = useCallback(async () => {
+    console.log("🔄 HomeScreen - Product added, refreshing...");
     setRefreshing(true);
-    await fetchProducts();
-    setVersion((prev) => prev + 1);
-    setRefreshing(false);
-  }, [fetchProducts, setRefreshing]);
+    try {
+      await refreshProducts();
+      setVersion((prev) => prev + 1);
+      console.log("✅ HomeScreen - Product refresh completed");
+    } catch (error) {
+      console.error("❌ HomeScreen - Product refresh failed:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshProducts, setRefreshing]);
 
   const handleImageError = useCallback((productId: string, url: string) => {
     setFailedImages((prev) => new Set(prev).add(productId));
@@ -71,7 +94,15 @@ export default function HomeScreen() {
     setBuyNowModalVisible(true);
   }, []);
 
-  if (loading) {
+  // ADDED: Log products for debugging
+  useEffect(() => {
+    console.log("📊 HomeScreen - Products:", products?.length || 0);
+    console.log("📊 HomeScreen - Loading:", loading);
+    console.log("📊 HomeScreen - Error:", productsError);
+  }, [products, loading, productsError]);
+
+  // FIXED: Only show loading if loading AND no products
+  if (loading && products.length === 0) {
     return (
       <View
         style={[styles.loadingContainer, isDark && styles.darkLoadingContainer]}
@@ -80,6 +111,22 @@ export default function HomeScreen() {
         <ThemedText style={[styles.loadingText, isDark && styles.darkText]}>
           Loading trending products...
         </ThemedText>
+      </View>
+    );
+  }
+
+  // ADDED: Error state
+  if (productsError && products.length === 0) {
+    return (
+      <View
+        style={[styles.loadingContainer, isDark && styles.darkLoadingContainer]}
+      >
+        <Text style={[styles.errorText, isDark && styles.darkText]}>
+          ⚠️ {productsError}
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -170,6 +217,27 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 12, fontSize: 16, color: "#666" },
   darkText: { color: "#fff" },
   darkSubtitle: { color: "#999" },
+
+  // ADDED: Error styles
+  errorText: {
+    fontSize: 16,
+    color: "#e53935",
+    textAlign: "center",
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: "#e53935",
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
   headerContainer: { padding: 16, paddingBottom: 8 },
   headerRow: {
     flexDirection: "row",

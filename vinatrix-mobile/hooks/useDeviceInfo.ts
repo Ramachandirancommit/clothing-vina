@@ -4,6 +4,8 @@ import * as Device from "expo-device";
 import * as Network from "expo-network";
 import { useCallback } from "react";
 import { Platform } from "react-native";
+import { api } from "../services/api"; // Add this import
+import { storageService } from "../services/storage"; // Add this import
 
 export const useDeviceInfo = () => {
   const getDeviceInfo = useCallback(async () => {

@@ -15,6 +15,8 @@ interface ProductCardProps {
   onBuyNow: (product: Product) => void;
   onImageError: (productId: string, url: string) => void;
   hasImageError: boolean;
+  horizontal?: boolean; // Added this prop
+  isDark?: boolean; // Added this prop
 }
 
 const renderStars = (rating: number) => {
@@ -33,11 +35,31 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onBuyNow,
   onImageError,
   hasImageError,
+  horizontal = false,
+  isDark: propIsDark = false,
 }) => {
-  const { isDark } = useTheme();
+  const { isDark: contextIsDark } = useTheme();
+  const isDark = propIsDark || contextIsDark;
+
+  // Dynamic styles based on horizontal prop
+  const cardStyles = [
+    styles.card,
+    isDark && styles.darkCard,
+    horizontal && styles.horizontalCard,
+  ];
+
+  const imageStyles = [
+    styles.productImage,
+    horizontal && styles.horizontalImage,
+  ];
+
+  const actionButtonsStyles = [
+    styles.actionButtons,
+    horizontal && styles.horizontalActions,
+  ];
 
   return (
-    <View style={[styles.card, isDark && styles.darkCard]}>
+    <View style={cardStyles}>
       <TouchableOpacity
         style={styles.wishlistIcon}
         onPress={() => onWishlistToggle(product)}
@@ -52,7 +74,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       <Image
         source={{ uri: hasImageError ? PLACEHOLDER_IMAGE : product.image }}
-        style={styles.productImage}
+        style={imageStyles}
         resizeMode="cover"
         onError={() => onImageError(product.id, product.image)}
       />
@@ -128,7 +150,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
       </View>
 
-      <View style={styles.actionButtons}>
+      <View style={actionButtonsStyles}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.addToCartBtn]}
           onPress={() => onAddToCart(product)}
@@ -158,6 +180,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     elevation: 2,
     position: "relative",
+  },
+  horizontalCard: {
+    width: 200, // Fixed width for horizontal scrolling
+    marginRight: 8,
   },
   darkCard: {
     backgroundColor: "#2a2a2a",
@@ -195,6 +221,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
     backgroundColor: "#f0f0f0",
+  },
+  horizontalImage: {
+    height: 120, // Slightly smaller for horizontal cards
   },
   productName: {
     fontSize: 14,
@@ -265,7 +294,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   progressFill: { height: 4, backgroundColor: "#1976d2", borderRadius: 10 },
-  actionButtons: { flexDirection: "row", gap: 8, marginTop: 4 },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  horizontalActions: {
+    flexDirection: "column", // Stack buttons vertically for horizontal cards
+    gap: 4,
+  },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -279,3 +316,5 @@ const styles = StyleSheet.create({
   buyNowBtn: { backgroundColor: "#e53935" },
   btnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
 });
+
+export default ProductCard;

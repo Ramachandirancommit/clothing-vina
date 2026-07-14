@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -35,6 +36,25 @@ interface Address {
   is_primary: number;
 }
 
+interface UserProfileResponse {
+  success: boolean;
+  user?: {
+    full_name?: string;
+    phone?: string;
+    email?: string;
+  };
+  addresses?: Address[];
+  error?: string;
+}
+
+interface OrderResponse {
+  success: boolean;
+  order?: {
+    order_number: string;
+  };
+  error?: string;
+}
+
 export const BuyNowModal: React.FC<BuyNowModalProps> = ({
   visible,
   onClose,
@@ -45,16 +65,17 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
   const { getUserId, getDeviceInfo, getOrCreateUser } = useDeviceInfo();
 
   // Form states
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerName, setCustomerName] = useState<string>("");
+  const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
-  const [processing, setProcessing] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] =
+    useState<string>("cash");
+  const [processing, setProcessing] = useState<boolean>(false);
 
   // Add address form
-  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [showAddAddressForm, setShowAddAddressForm] = useState<boolean>(false);
   const [newAddress, setNewAddress] = useState({
     address_label: "Home",
     address_text: "",
@@ -64,16 +85,16 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
   });
 
   // Card details
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState<string>("");
+  const [cardExpiry, setCardExpiry] = useState<string>("");
+  const [cardCvv, setCardCvv] = useState<string>("");
+  const [cardName, setCardName] = useState<string>("");
 
   const BASE_URL = "https://api.vinatrix-api.workers.dev";
 
-  const fetchAddresses = async (uuid: string) => {
+  const fetchAddresses = async (uuid: string): Promise<void> => {
     try {
-      const response = await api.getUserProfile(uuid);
+      const response = (await api.getUserProfile(uuid)) as UserProfileResponse;
       if (
         response.success &&
         response.addresses &&
@@ -94,7 +115,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
     }
   };
 
-  const getMySQLDate = () => {
+  const getMySQLDate = (): string => {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -105,7 +126,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   };
 
-  const getImageUrl = (imagePath: string) => {
+  const getImageUrl = (imagePath: string): string => {
     if (!imagePath) return "";
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
       return imagePath;
@@ -116,7 +137,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
     return `${BASE_URL}/${imagePath}`;
   };
 
-  const addNewAddress = async () => {
+  const addNewAddress = async (): Promise<void> => {
     if (!newAddress.address_text || !newAddress.city || !newAddress.pincode) {
       Alert.alert("Error", "Please fill address, city and pincode");
       return;
@@ -124,7 +145,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
 
     try {
       const userUuid = await getUserId();
-      const response = await api.updateUserProfile(userUuid, {
+      const response = (await api.updateUserProfile(userUuid, {
         full_name: customerName,
         user_name: "",
         email: customerEmail,
@@ -150,7 +171,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
               newAddress.address_label === "Home" ? "home" : "other",
           },
         ],
-      });
+      })) as UserProfileResponse;
 
       if (response.success) {
         await fetchAddresses(userUuid);
@@ -170,7 +191,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
     }
   };
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (): Promise<void> => {
     if (!selectedAddress) {
       Alert.alert("Error", "Please select a delivery address");
       return;
@@ -199,46 +220,49 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
 
     setProcessing(true);
 
+    const userId = await getUserId();
+    const safePrice = parseFloat(product?.price || "0");
+
     const orderData = {
-      cust_id: await getUserId(),
+      cust_id: userId,
       customer_name: customerName.trim(),
       customer_phone: customerPhone.trim(),
       address: selectedAddress.address_text,
       city: selectedAddress.city,
       state: selectedAddress.state,
       pincode: selectedAddress.pincode,
-      total_amount: parseFloat(product.price),
+      total_amount: safePrice,
       delivery_fee: 0,
       tax_amount: 0,
-      grand_total: parseFloat(product.price),
+      grand_total: safePrice,
       item_count: 1,
       payment_method: selectedPaymentMethod,
       order_date: getMySQLDate(),
       cart_items: [
         {
-          product_id: parseInt(product.id),
+          product_id: parseInt(product.id, 10),
           product_name: product.product_name,
           product_category: product.product_category,
-          price: parseFloat(product.price),
+          price: safePrice,
           quantity: 1,
         },
       ],
     };
 
     try {
-      const response = await api.createOrder(orderData);
+      const response = (await api.createOrder(orderData)) as OrderResponse;
 
-      if (response.success) {
+      if (response.success && response.order) {
         Alert.alert(
           "✅ Order Placed Successfully! 🎉🎉🎉",
-          `Order #${response.order.order_number}\nTotal: ₹${parseFloat(product.price).toFixed(2)}\nPayment: ${getPaymentMethodName(selectedPaymentMethod)}\n\nDelivery to: ${selectedAddress.address_text}`,
+          `Order #${response.order.order_number}\nTotal: ₹${safePrice.toFixed(2)}\nPayment: ${getPaymentMethodName(selectedPaymentMethod)}\n\nDelivery to: ${selectedAddress.address_text}`,
           [
             {
               text: "Track Order",
               onPress: () => {
                 onClose();
                 if (onOrderSuccess) {
-                  onOrderSuccess(response.order.order_number);
+                  onOrderSuccess(response.order?.order_number || "");
                 }
               },
             },
@@ -256,7 +280,7 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
     }
   };
 
-  const getPaymentMethodName = (methodId: string) => {
+  const getPaymentMethodName = (methodId: string): string => {
     const methods: Record<string, string> = {
       cash: "Cash on Delivery",
       upi: "UPI",
@@ -268,11 +292,13 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
   // Load user data when modal opens
   useEffect(() => {
     if (visible && product) {
-      const loadUserData = async () => {
+      const loadUserData = async (): Promise<void> => {
         const userId = await getUserId();
         if (userId) {
           await fetchAddresses(userId);
-          const response = await api.getUserProfile(userId);
+          const response = (await api.getUserProfile(
+            userId,
+          )) as UserProfileResponse;
           if (response.success && response.user) {
             if (response.user.full_name)
               setCustomerName(response.user.full_name);
@@ -674,11 +700,13 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
               onPress={handlePlaceOrder}
               disabled={processing}
             >
-              <Text style={styles.placeOrderText}>
-                {processing
-                  ? "Processing..."
-                  : `Place Order • ₹${safePrice.toFixed(2)}`}
-              </Text>
+              {processing ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.placeOrderText}>
+                  Place Order • ₹{safePrice.toFixed(2)}
+                </Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.bottomModalPadding} />
@@ -899,6 +927,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
     backgroundColor: "#fff",
+    color: "#333",
   },
   darkInput: {
     borderColor: "#444",
@@ -997,3 +1026,5 @@ const styles = StyleSheet.create({
     height: 30,
   },
 });
+
+export default BuyNowModal;

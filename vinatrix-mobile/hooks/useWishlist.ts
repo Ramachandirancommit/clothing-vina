@@ -118,7 +118,10 @@ export const useWishlist = () => {
           setWishlistCount(
             isInWishlist ? wishlist.length + 1 : wishlist.length - 1,
           );
-          Alert.alert("Error", response.message || "Failed to update wishlist");
+          // FIXED: Use response.message only if it exists, otherwise use fallback message
+          const errorMessage =
+            (response as any)?.message || "Failed to update wishlist";
+          Alert.alert("Error", errorMessage);
         }
       } catch (error) {
         console.error("❌ Error toggling wishlist:", error);
@@ -147,6 +150,8 @@ export const useWishlist = () => {
         eventEmitter.emit(EVENTS.WISHLIST_UPDATED);
         eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED, 0);
         Alert.alert("Success", "Wishlist cleared");
+      } else {
+        Alert.alert("Error", "Failed to clear wishlist");
       }
     } catch (error) {
       console.error("Error clearing wishlist:", error);
