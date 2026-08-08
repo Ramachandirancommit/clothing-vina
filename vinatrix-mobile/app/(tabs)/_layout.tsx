@@ -1,11 +1,80 @@
 import { Tabs, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react"; // ✅ ADDED useEffect
 import { Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import SellProductModal from "../../components/SellProductModal";
 import SettingsModal from "../../components/settings/settings-modal";
 import { useCartCount } from "../../hooks/useCartCount";
+import { useWishlist } from "../../hooks/useWishlist"; // ✅ ADDED
 import { eventEmitter, EVENTS } from "../../utils/eventEmitter";
 import { useTheme } from "../context/ThemeContext";
+
+// ✅ NEW COMPONENT: Wishlist Tab Icon with Badge
+// ✅ NEW COMPONENT: Wishlist Tab Icon with Badge
+function WishlistTabIcon() {
+  const { wishlistCount: hookCount } = useWishlist();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    setCount(hookCount);
+
+    // Define the listener function
+    const handleWishlistCountUpdate = (newCount: number) => {
+      console.log("❤️ Tab wishlist count updated:", newCount);
+      setCount(newCount);
+    };
+
+    // Subscribe to event
+    eventEmitter.on(EVENTS.WISHLIST_COUNT_UPDATED, handleWishlistCountUpdate);
+
+    // Cleanup - pass the SAME function to off()
+    return () => {
+      eventEmitter.off(
+        EVENTS.WISHLIST_COUNT_UPDATED,
+        handleWishlistCountUpdate,
+      );
+    };
+  }, [hookCount]);
+
+  return (
+    <View
+      style={{
+        position: "relative",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ fontSize: 24 }}>❤️</Text>
+      {count > 0 && (
+        <View
+          style={{
+            position: "absolute",
+            top: -6,
+            right: -10,
+            backgroundColor: "#e53935",
+            borderRadius: 12,
+            minWidth: 18,
+            height: 18,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 4,
+            borderWidth: 1.5,
+            borderColor: "#ffffff",
+          }}
+        >
+          <Text
+            style={{
+              color: "white",
+              fontSize: 9,
+              fontWeight: "bold",
+            }}
+          >
+            {count > 99 ? "99+" : count}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   const router = useRouter();
@@ -199,16 +268,13 @@ export default function TabsLayout() {
           }}
         />
 
+        {/* ✅ UPDATED: Wishlist tab with badge */}
         <Tabs.Screen
           name="wishlist"
           options={{
             title: "Wishlist",
             tabBarLabel: "Wishlist",
-            tabBarIcon: ({ focused, color, size }) => (
-              <View style={{ alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 24 }}>❤️</Text>
-              </View>
-            ),
+            tabBarIcon: () => <WishlistTabIcon />,
           }}
         />
 

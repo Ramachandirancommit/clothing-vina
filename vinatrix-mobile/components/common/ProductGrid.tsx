@@ -1,4 +1,4 @@
-// components/common/ProductGrid.tsx
+// components/common/ProductGrid.tsx - FIXED VERSION
 
 import React from "react";
 import {
@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Product } from "../../utils/types";
-import { HorizontalProductCard } from "./HorizontalProductCard";
+import HorizontalProductCard from "./HorizontalProductCard"; // ✅ Default import
 
 interface ProductGridProps {
   products: Product[];

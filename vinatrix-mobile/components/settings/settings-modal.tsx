@@ -2,11 +2,9 @@ import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AboutUsScreen from "./about-us";
-import Addresses from "./addresses";
-import ChangePasswordScreen from "./change-password";
 import HelpCenterScreen from "./help-center";
+import PrivacyPolicyScreen from "./privacy-policy";
 import ProfileInfo from "./profile-info";
-// import PushSettings from "./push-settings"; // ❌ REMOVED - Now inline in settingsContent
 import SettingsContent from "./settingsContent";
 
 interface Props {
@@ -16,12 +14,10 @@ interface Props {
 
 type ScreenType =
   | "menu"
-  // | "push-settings"  // ❌ REMOVED - No longer needed
   | "profile-info"
-  | "change-password"
-  | "addresses"
   | "help-center"
-  | "about-us";
+  | "about-us"
+  | "privacy-policy"; // ✅ NEW
 
 export default function SettingsModal({ visible, onClose }: Props) {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>("menu");
@@ -38,18 +34,14 @@ export default function SettingsModal({ visible, onClose }: Props) {
     switch (currentScreen) {
       case "menu":
         return "Settings";
-      // case "push-settings":  // ❌ REMOVED
-      //   return "Push Notifications";
       case "profile-info":
         return "Profile Information";
-      case "change-password":
-        return "Change Password";
-      case "addresses":
-        return "Addresses";
       case "help-center":
         return "Help Center";
       case "about-us":
         return "About Us";
+      case "privacy-policy": // ✅ NEW
+        return "Privacy Policy";
       default:
         return "Settings";
     }
@@ -59,18 +51,14 @@ export default function SettingsModal({ visible, onClose }: Props) {
     switch (currentScreen) {
       case "menu":
         return <SettingsContent navigateTo={navigateTo} onClose={onClose} />;
-      // case "push-settings":  // ❌ REMOVED
-      //   return <PushSettings goBack={goBack} />;
       case "profile-info":
         return <ProfileInfo goBack={goBack} />;
-      case "change-password":
-        return <ChangePasswordScreen goBack={goBack} />;
-      case "addresses":
-        return <Addresses goBack={goBack} />;
       case "help-center":
         return <HelpCenterScreen goBack={goBack} />;
       case "about-us":
         return <AboutUsScreen goBack={goBack} />;
+      case "privacy-policy": // ✅ NEW
+        return <PrivacyPolicyScreen goBack={goBack} />;
       default:
         return <SettingsContent navigateTo={navigateTo} onClose={onClose} />;
     }
@@ -83,13 +71,11 @@ export default function SettingsModal({ visible, onClose }: Props) {
       visible={visible}
       onRequestClose={onClose}
     >
-      {/* TouchableOpacity to close modal when clicking outside */}
       <TouchableOpacity
         style={styles.modalOverlay}
         activeOpacity={1}
         onPress={onClose}
       >
-        {/* Content container - stops propagation so clicks inside don't close modal */}
         <TouchableOpacity
           style={styles.modalContainer}
           activeOpacity={1}

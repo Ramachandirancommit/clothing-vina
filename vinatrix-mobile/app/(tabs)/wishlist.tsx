@@ -1,14 +1,10 @@
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Device from "expo-device";
-import * as Network from "expo-network";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -18,7 +14,8 @@ import {
   View,
 } from "react-native";
 import { ThemedText } from "../../components/themed-text";
-import { eventEmitter, EVENTS } from "../../utils/eventEmitter";
+import { useCart } from "../../hooks/useCart";
+import { useWishlist } from "../../hooks/useWishlist";
 import { useTheme } from "../context/ThemeContext";
 
 interface WishlistItem {
@@ -35,15 +32,24 @@ export default function WishlistScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
 
+  // ✅ USE THE HOOK INSTEAD OF MANAGING STATE
+  const {
+    wishlist,
+    wishlistCount,
+    loading,
+    refreshing,
+    setRefreshing,
+    fetchWishlist,
+    toggleWishlist,
+    clearWishlist: clearWishlistHook,
+  } = useWishlist();
+
+  const { addToCart } = useCart();
+
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [custId, setCustId] = useState<string>("");
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
   const BASE_URL = "https://api.vinatrix-api.workers.dev";
-  const WISHLIST_URL = `${BASE_URL}/api/wishlist`;
-  const CART_URL = `${BASE_URL}/api/cart`;
 
   // Helper function to safely get price as number
   const getPriceAsNumber = (price: number | string | undefined): number => {
@@ -76,277 +82,90 @@ export default function WishlistScreen() {
   };
 
   // =========================
-  // GET DEVICE INFO
+  // FETCH FULL PRODUCT DETAILS
   // =========================
-  const getDeviceInfo = async () => {
+  const fetchProductDetails = useCallback(async (productIds: string[]) => {
     try {
-      if (Platform.OS === "web") {
-        const userAgent = navigator.userAgent;
-        const screenResolution = `${window.screen.width}x${window.screen.height}`;
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!productIds || productIds.length === 0) {
+        setWishlistItems([]);
+        return;
+      }
 
-        let ipAddress = "web_client";
+      console.log(`🔍 Fetching details for ${productIds.length} products...`);
+
+      // Fetch product details for each ID
+      const productPromises = productIds.map(async (id) => {
         try {
-          const ipResponse = await fetch("https://api.ipify.org?format=json");
-          const ipData = await ipResponse.json();
-          if (ipData.ip) {
-            ipAddress = ipData.ip;
+          const response = await fetch(`${BASE_URL}/api/product/${id}`);
+          const data = await response.json();
+          if (data.success && data.product) {
+            return {
+              id: parseInt(id),
+              product_id: parseInt(id),
+              product_name:
+                data.product.product_name ||
+                data.product.name ||
+                `Product ${id}`,
+              product_category:
+                data.product.product_category ||
+                data.product.category ||
+                "Uncategorized",
+              price: data.product.price || 0,
+              product_image:
+                data.product.product_image ||
+                data.product.image ||
+                data.product.image_url ||
+                "",
+            };
           }
-        } catch (ipError) {
-          console.log("IP fetch failed, using fallback");
+          return null;
+        } catch (error) {
+          console.error(`Error fetching product ${id}:`, error);
+          return null;
         }
-
-        const deviceFingerprint = `WEB_${userAgent.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}_${screenResolution}_${timezone}`;
-
-        return {
-          deviceName: deviceFingerprint.substring(0, 50),
-          ipAddress: ipAddress,
-        };
-      }
-
-      const deviceName = Device.deviceName || "unknown";
-      const ipAddress = await Network.getIpAddressAsync();
-      return {
-        deviceName: deviceName,
-        ipAddress: ipAddress,
-      };
-    } catch (error) {
-      console.error("Error getting device info:", error);
-      return {
-        deviceName: "unknown_device",
-        ipAddress: "0.0.0.0",
-      };
-    }
-  };
-
-  // =========================
-  // GET OR CREATE USER
-  // =========================
-  const getOrCreateUser = async (): Promise<string | null> => {
-    try {
-      let userId = await AsyncStorage.getItem("app_user_id");
-
-      if (userId) {
-        console.log("✅ Found existing user ID:", userId);
-        return userId;
-      }
-
-      const deviceInfo = await getDeviceInfo();
-      const deviceId =
-        Platform.OS === "web"
-          ? deviceInfo.deviceName
-          : `${deviceInfo.deviceName}_${Device.osBuildId || Date.now()}`;
-
-      console.log("📡 Creating new user with deviceId:", deviceId);
-
-      const response = await fetch(`${BASE_URL}/api/user/get-or-create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cust_deviceid: deviceId,
-          ip_address: deviceInfo.ipAddress,
-        }),
       });
 
-      const data = await response.json();
-      console.log("📥 User API Response:", JSON.stringify(data, null, 2));
-
-      if (data.success && data.user) {
-        const userId = data.user.user_uuid || data.user.cust_id;
-        await AsyncStorage.setItem("app_user_id", userId);
-        console.log("✅ Created new user with ID:", userId);
-        return userId;
-      } else {
-        console.error("❌ Failed to create user:", data);
-      }
+      const products = await Promise.all(productPromises);
+      const validProducts = products.filter(
+        (p): p is WishlistItem => p !== null,
+      );
+      setWishlistItems(validProducts);
+      console.log(`✅ Fetched ${validProducts.length} product details`);
     } catch (error) {
-      console.error("❌ Error getting/creating user:", error);
+      console.error("Error fetching product details:", error);
     }
-    return null;
-  };
-
-  // =========================
-  // SAVE WISHLIST TO STORAGE
-  // =========================
-  const saveWishlistToStorage = async (items: WishlistItem[]) => {
-    try {
-      await AsyncStorage.setItem("wishlist_items", JSON.stringify(items));
-      await AsyncStorage.setItem("wishlist_count", String(items.length));
-      await AsyncStorage.setItem("wishlist_last_fetch", String(Date.now()));
-      console.log(`💾 Saved ${items.length} items to storage`);
-    } catch (error) {
-      console.error("Error saving wishlist to storage:", error);
-    }
-  };
-
-  // =========================
-  // LOAD WISHLIST FROM STORAGE
-  // =========================
-  const loadWishlistFromStorage = async (): Promise<WishlistItem[] | null> => {
-    try {
-      const stored = await AsyncStorage.getItem("wishlist_items");
-      if (stored) {
-        const items = JSON.parse(stored);
-        console.log(`📦 Loaded ${items.length} items from storage`);
-        return items;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error loading wishlist from storage:", error);
-      return null;
-    }
-  };
-
-  // =========================
-  // FETCH WISHLIST - WITH CACHE
-  // =========================
-  const fetchWishlist = useCallback(
-    async (forceRefresh: boolean = false) => {
-      try {
-        if (!custId) {
-          console.log("⚠️ No custId available, waiting for user creation...");
-          return;
-        }
-
-        // Try to load from storage first (unless force refresh)
-        if (!forceRefresh) {
-          const cachedItems = await loadWishlistFromStorage();
-          if (cachedItems && cachedItems.length > 0) {
-            setWishlistItems(cachedItems);
-            setLoading(false);
-            setRefreshing(false);
-            console.log(
-              `📦 Using cached wishlist: ${cachedItems.length} items`,
-            );
-
-            // Still fetch in background to update
-            fetchWishlist(true);
-            return;
-          }
-        }
-
-        console.log(`📡 Fetching wishlist for custId: ${custId}`);
-        const url = `${WISHLIST_URL}?cust_id=${encodeURIComponent(custId)}`;
-        console.log("📡 Fetching URL:", url);
-
-        const response = await fetch(url, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        const data = await response.json();
-        console.log("📥 Wishlist API Response:", JSON.stringify(data, null, 2));
-
-        if (data.success && data.items) {
-          console.log(`✅ Items count: ${data.items.length}`);
-          setWishlistItems(data.items);
-          setImageErrors({});
-
-          // Save to storage
-          await saveWishlistToStorage(data.items);
-
-          // Emit event to update badge count
-          eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED, data.items.length);
-        } else {
-          console.log("⚠️ API returned no items:", data.error || data.message);
-          setWishlistItems([]);
-          await saveWishlistToStorage([]);
-        }
-      } catch (error) {
-        console.error("❌ Error fetching wishlist:", error);
-
-        // Try to load from storage as fallback
-        const cachedItems = await loadWishlistFromStorage();
-        if (cachedItems && cachedItems.length > 0) {
-          setWishlistItems(cachedItems);
-          console.log(
-            `📦 Fallback to cached wishlist: ${cachedItems.length} items`,
-          );
-        } else {
-          setWishlistItems([]);
-        }
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [custId],
-  );
-
-  // =========================
-  // INIT - Get User ID and Load Data
-  // =========================
-  useEffect(() => {
-    const init = async () => {
-      try {
-        // First try to load from storage immediately
-        const cachedItems = await loadWishlistFromStorage();
-        if (cachedItems && cachedItems.length > 0) {
-          setWishlistItems(cachedItems);
-          console.log(
-            `📦 Initial load from storage: ${cachedItems.length} items`,
-          );
-        }
-
-        const userId = await getOrCreateUser();
-        if (userId) {
-          setCustId(userId);
-          console.log("✅ User ID set:", userId);
-        } else {
-          console.error("❌ Failed to get/create user");
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("❌ Init error:", error);
-        setLoading(false);
-      }
-    };
-    init();
   }, []);
 
   // =========================
-  // FETCH when custId changes
+  // LOAD WISHLIST ITEMS
   // =========================
   useEffect(() => {
-    if (custId) {
-      console.log("🔄 custId changed, fetching wishlist...");
-      fetchWishlist(true); // Force refresh from API
+    // Fetch wishlist IDs
+    console.log("🔄 Fetching wishlist...");
+    fetchWishlist(true);
+  }, []);
+
+  // When wishlist IDs change, fetch product details
+  useEffect(() => {
+    if (wishlist && wishlist.length > 0) {
+      console.log(`🔄 Wishlist IDs changed: ${wishlist.length} items`);
+      fetchProductDetails(wishlist);
+    } else if (wishlist && wishlist.length === 0) {
+      setWishlistItems([]);
     }
-  }, [custId, fetchWishlist]);
-
-  // =========================
-  // Listen for wishlist updated events
-  // =========================
-  useEffect(() => {
-    const handleWishlistUpdated = () => {
-      console.log("🔄 Wishlist updated event received, refetching...");
-      if (custId) {
-        fetchWishlist(true); // Force refresh
-      }
-    };
-
-    eventEmitter.on(EVENTS.WISHLIST_UPDATED, handleWishlistUpdated);
-
-    return () => {
-      eventEmitter.off(EVENTS.WISHLIST_UPDATED, handleWishlistUpdated);
-    };
-  }, [custId, fetchWishlist]);
+  }, [wishlist]);
 
   // =========================
   // PULL TO REFRESH
   // =========================
   const onRefresh = useCallback(() => {
+    console.log("🔄 Pull to refresh triggered");
     setRefreshing(true);
-    if (custId) {
-      fetchWishlist(true); // Force refresh
-    } else {
-      setRefreshing(false);
-    }
-  }, [custId, fetchWishlist]);
+    fetchWishlist(true);
+  }, [fetchWishlist, setRefreshing]);
 
   // =========================
-  // REMOVE FROM WISHLIST
+  // REMOVE FROM WISHLIST - USE HOOK
   // =========================
   const removeFromWishlist = (productId: number, productName: string) => {
     Alert.alert(
@@ -358,34 +177,13 @@ export default function WishlistScreen() {
           text: "Remove",
           onPress: async () => {
             try {
-              const userId = await getOrCreateUser();
-              if (!userId) {
-                Alert.alert("Error", "User not found");
-                return;
-              }
-
-              console.log(`🗑️ Removing product ${productId} from wishlist...`);
-
-              const response = await fetch(`${WISHLIST_URL}/remove`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  cust_id: userId,
-                  product_id: productId,
-                }),
-              });
-
-              const data = await response.json();
-              console.log("📤 Remove response:", data);
-
-              if (data.success) {
-                await fetchWishlist(true); // Force refresh
-                eventEmitter.emit(EVENTS.WISHLIST_UPDATED);
-                eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED);
-                Alert.alert("Success", "Item removed from wishlist");
-              } else {
-                Alert.alert("Error", data.error || "Failed to remove");
-              }
+              // Create a fake product object for the hook
+              const product = {
+                id: String(productId),
+                product_name: productName,
+              };
+              await toggleWishlist(product);
+              Alert.alert("Success", "Item removed from wishlist");
             } catch (error) {
               console.error("Error removing:", error);
               Alert.alert("Error", "Failed to remove item");
@@ -398,64 +196,9 @@ export default function WishlistScreen() {
   };
 
   // =========================
-  // ADD TO CART
+  // CLEAR WISHLIST - USE HOOK
   // =========================
-  const addToCart = async (item: WishlistItem) => {
-    try {
-      const userId = await getOrCreateUser();
-      if (!userId) {
-        Alert.alert("Error", "User not found");
-        return;
-      }
-
-      const deviceInfo = await getDeviceInfo();
-      const { ipAddress, deviceName } = deviceInfo;
-      const itemPrice = getPriceAsNumber(item.price);
-
-      console.log(`🛒 Adding ${item.product_name} to cart...`);
-
-      const response = await fetch(`${CART_URL}/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cust_id: userId,
-          ip_address: ipAddress,
-          cust_deviceid: deviceName,
-          productId: item.product_id,
-          productName: item.product_name,
-          productCategory: item.product_category,
-          price: itemPrice,
-          productImage: item.product_image,
-        }),
-      });
-
-      const data = await response.json();
-      console.log("📤 Add to cart response:", data);
-
-      if (data.success) {
-        eventEmitter.emit(EVENTS.CART_UPDATED);
-        eventEmitter.emit(EVENTS.CART_COUNT_UPDATED);
-        Alert.alert("Success", `${item.product_name} added to cart`);
-      } else {
-        Alert.alert("Error", data.error || "Failed to add to cart");
-      }
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      Alert.alert("Error", "Failed to add to cart");
-    }
-  };
-
-  // =========================
-  // VIEW PRODUCT DETAILS
-  // =========================
-  const viewProduct = (productId: number) => {
-    router.push(`/product/${productId}` as any);
-  };
-
-  // =========================
-  // CLEAR WISHLIST
-  // =========================
-  const clearWishlist = () => {
+  const handleClearWishlist = () => {
     if (wishlistItems.length === 0) return;
 
     Alert.alert(
@@ -467,28 +210,8 @@ export default function WishlistScreen() {
           text: "Clear",
           onPress: async () => {
             try {
-              const userId = await getOrCreateUser();
-              if (!userId) {
-                Alert.alert("Error", "User not found");
-                return;
-              }
-
-              const response = await fetch(`${WISHLIST_URL}/clear`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cust_id: userId }),
-              });
-
-              const data = await response.json();
-              if (data.success) {
-                await saveWishlistToStorage([]);
-                setWishlistItems([]);
-                eventEmitter.emit(EVENTS.WISHLIST_UPDATED);
-                eventEmitter.emit(EVENTS.WISHLIST_COUNT_UPDATED);
-                Alert.alert("Success", "Wishlist cleared");
-              } else {
-                Alert.alert("Error", data.error || "Failed to clear");
-              }
+              await clearWishlistHook();
+              Alert.alert("Success", "Wishlist cleared");
             } catch (error) {
               console.error("Error clearing:", error);
               Alert.alert("Error", "Failed to clear wishlist");
@@ -498,6 +221,33 @@ export default function WishlistScreen() {
         },
       ],
     );
+  };
+
+  // =========================
+  // ADD TO CART - USE HOOK
+  // =========================
+  const handleAddToCart = async (item: WishlistItem) => {
+    try {
+      const product = {
+        id: item.product_id,
+        product_name: item.product_name,
+        product_category: item.product_category,
+        price: getPriceAsNumber(item.price),
+        image: item.product_image,
+      };
+      await addToCart(product);
+      Alert.alert("Success", `${item.product_name} added to cart`);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      Alert.alert("Error", "Failed to add to cart");
+    }
+  };
+
+  // =========================
+  // VIEW PRODUCT DETAILS
+  // =========================
+  const viewProduct = (productId: number) => {
+    router.push(`/product/${productId}` as any);
   };
 
   if (loading) {
@@ -531,7 +281,7 @@ export default function WishlistScreen() {
           </Text>
           {wishlistItems.length > 0 && (
             <TouchableOpacity
-              onPress={clearWishlist}
+              onPress={handleClearWishlist}
               style={styles.clearButton}
             >
               <Text style={styles.clearButtonText}>Clear All</Text>
@@ -564,7 +314,7 @@ export default function WishlistScreen() {
 
               return (
                 <View
-                  key={item.id}
+                  key={item.id || item.product_id}
                   style={[
                     styles.wishlistItem,
                     isDark && styles.darkWishlistItem,
@@ -621,7 +371,7 @@ export default function WishlistScreen() {
                     <View style={styles.actionButtons}>
                       <TouchableOpacity
                         style={styles.addToCartButton}
-                        onPress={() => addToCart(item)}
+                        onPress={() => handleAddToCart(item)}
                       >
                         <Feather name="shopping-cart" size={16} color="#fff" />
                         <Text style={styles.addToCartText}>Add to Cart</Text>

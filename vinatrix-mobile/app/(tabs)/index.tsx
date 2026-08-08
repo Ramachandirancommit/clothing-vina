@@ -1,4 +1,4 @@
-// app/index.tsx - FIXED VERSION
+// app/index.tsx - FIXED VERSION WITH STORAGE CLEAR
 
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -11,9 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { storageService } from "../../services/storage";
+
 import SellProductModal from "../../components/SellProductModal";
 import BuyNowModal from "../../components/common/BuyNowModal";
-import { ProductGrid } from "../../components/common/ProductGrid";
+import ProductGrid from "../../components/common/ProductGrid";
 import { ThemedText } from "../../components/themed-text";
 import { useCart } from "../../hooks/useCart";
 import { useProducts } from "../../hooks/useProducts";
@@ -32,8 +35,8 @@ export default function HomeScreen() {
   const {
     products,
     loading: productsLoading,
-    refreshProducts, // CHANGED: Use refreshProducts instead of fetchProducts
-    error: productsError, // Added error handling
+    refreshProducts,
+    error: productsError,
   } = useProducts({
     sortBy: "popularity",
     sortOrder: "desc",
@@ -55,6 +58,32 @@ export default function HomeScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const loading = productsLoading || wishlistLoading;
+
+  // =========================
+  // TEMPORARY: Clear storage to test new device ID logic
+  // REMOVE THIS AFTER TESTING
+  // =========================
+  useEffect(() => {
+    const resetStorage = async () => {
+      await storageService.clearAll();
+      console.log("🗑️ Storage cleared - Starting fresh with new device ID");
+      const allData = await storageService.getAllData();
+      console.log("📦 Storage after clear:", allData);
+    };
+
+    resetStorage();
+  }, []);
+
+  // =========================
+  // DEBUG: Check user ID on home screen
+  // =========================
+  useEffect(() => {
+    const checkUserId = async () => {
+      const userId = await storageService.getUserId();
+      console.log("🏠 Home Screen - Current User ID:", userId);
+    };
+    checkUserId();
+  }, []);
 
   // FIXED: Use refreshProducts instead of fetchProducts
   const onRefresh = useCallback(async () => {
@@ -146,17 +175,7 @@ export default function HomeScreen() {
                 Trending Now
               </ThemedText>
             </View>
-            <TouchableOpacity
-              onPress={() => router.push("/wishlist")}
-              style={styles.wishlistHeaderButton}
-            >
-              <Text style={{ fontSize: 22 }}>❤️</Text>
-              {wishlistCount > 0 && (
-                <View style={styles.wishlistBadge}>
-                  <Text style={styles.wishlistBadgeText}>{wishlistCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {/* ❌ HEART ICON REMOVED */}
           </View>
           <ThemedText
             style={[styles.pageSubtitle, isDark && styles.darkSubtitle]}
@@ -218,7 +237,6 @@ const styles = StyleSheet.create({
   darkText: { color: "#fff" },
   darkSubtitle: { color: "#999" },
 
-  // ADDED: Error styles
   errorText: {
     fontSize: 16,
     color: "#e53935",
@@ -251,27 +269,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: { fontSize: 24, fontWeight: "bold", color: "#111" },
   pageSubtitle: { fontSize: 14, color: "#666", marginTop: 4 },
-  wishlistHeaderButton: {
-    position: "relative",
-    padding: 8,
-  },
-  wishlistBadge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    backgroundColor: "#e53935",
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  wishlistBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
+
   fabButton: {
     position: "absolute",
     bottom: 20,

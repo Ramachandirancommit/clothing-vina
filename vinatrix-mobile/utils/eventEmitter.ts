@@ -1,3 +1,4 @@
+// eventEmitter.ts
 type EventListener = (...args: any[]) => void;
 
 class EventEmitter {

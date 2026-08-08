@@ -41,9 +41,7 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
     setPushEnabled(value);
     try {
       await AsyncStorage.setItem("pushEnabled", JSON.stringify(value));
-      // Here you would also call your push notification service
       if (value) {
-        // Request push notification permissions
         console.log("Push notifications enabled");
       } else {
         console.log("Push notifications disabled");
@@ -85,7 +83,7 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
             Preferences
           </Text>
 
-          {/* Push Notifications - Toggle inline (no navigation) */}
+          {/* Push Notifications - Toggle inline */}
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <Feather name="bell" size={22} color={isDark ? "#999" : "#555"} />
@@ -100,7 +98,7 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
             />
           </View>
 
-          {/* Dark Mode - Toggle inline (no navigation) */}
+          {/* Dark Mode - Toggle inline */}
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <Feather name="moon" size={22} color={isDark ? "#999" : "#555"} />
@@ -124,6 +122,7 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
             Account
           </Text>
 
+          {/* Profile Information */}
           <TouchableOpacity
             style={styles.settingItem}
             onPress={() => handleNavigation("profile-info")}
@@ -132,44 +131,6 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
               <Feather name="user" size={22} color={isDark ? "#999" : "#555"} />
               <Text style={[styles.settingText, isDark && styles.darkText]}>
                 Profile Information
-              </Text>
-            </View>
-            <Feather
-              name="chevron-right"
-              size={20}
-              color={isDark ? "#666" : "#999"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => handleNavigation("change-password")}
-          >
-            <View style={styles.settingLeft}>
-              <Feather name="lock" size={22} color={isDark ? "#999" : "#555"} />
-              <Text style={[styles.settingText, isDark && styles.darkText]}>
-                Change Password
-              </Text>
-            </View>
-            <Feather
-              name="chevron-right"
-              size={20}
-              color={isDark ? "#666" : "#999"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => handleNavigation("addresses")}
-          >
-            <View style={styles.settingLeft}>
-              <Feather
-                name="map-pin"
-                size={22}
-                color={isDark ? "#999" : "#555"}
-              />
-              <Text style={[styles.settingText, isDark && styles.darkText]}>
-                Addresses
               </Text>
             </View>
             <Feather
@@ -226,6 +187,29 @@ export default function SettingsContent({ navigateTo, onClose }: Props) {
             />
           </TouchableOpacity>
 
+          {/* ✅ Privacy Policy - NEW */}
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => handleNavigation("privacy-policy")}
+          >
+            <View style={styles.settingLeft}>
+              <Feather
+                name="shield"
+                size={22}
+                color={isDark ? "#999" : "#555"}
+              />
+              <Text style={[styles.settingText, isDark && styles.darkText]}>
+                Privacy Policy
+              </Text>
+            </View>
+            <Feather
+              name="chevron-right"
+              size={20}
+              color={isDark ? "#666" : "#999"}
+            />
+          </TouchableOpacity>
+
+          {/* Logout */}
           <TouchableOpacity
             style={[styles.settingItem, styles.logoutItem]}
             onPress={handleLogout}

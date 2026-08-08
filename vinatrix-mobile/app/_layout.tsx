@@ -41,10 +41,44 @@ function RootLayoutContent() {
   return (
     <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            headerShown: false,
+          }}
+        />
+
         <Stack.Screen
           name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
+          options={{
+            presentation: "modal",
+            title: "Modal",
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="wishlist"
+          options={{
+            title: "Wishlist",
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="cart"
+          options={{
+            title: "Cart",
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="product/[id]"
+          options={{
+            title: "Product Details",
+            headerShown: false,
+          }}
         />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />

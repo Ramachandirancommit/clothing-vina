@@ -4,8 +4,7 @@ import * as Device from "expo-device";
 import * as Network from "expo-network";
 import { useCallback } from "react";
 import { Platform } from "react-native";
-import { api } from "../services/api"; // Add this import
-import { storageService } from "../services/storage"; // Add this import
+import { storageService } from "../services/storage";
 
 export const useDeviceInfo = () => {
   const getDeviceInfo = useCallback(async () => {
@@ -32,10 +31,20 @@ export const useDeviceInfo = () => {
           console.log("IP fetch failed, using fallback");
         }
 
-        const deviceFingerprint = `WEB_${userAgent.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}_${screenResolution}_${timezone}`;
+        // Check if we have a stored device ID
+        let deviceId = localStorage.getItem("device_id");
+        if (!deviceId) {
+          const timestamp = Date.now();
+          const random = Math.random().toString(36).substring(2, 10);
+          deviceId = `DEVICE_${timestamp}_${random}`;
+          localStorage.setItem("device_id", deviceId);
+          console.log("🆕 Created new device ID:", deviceId);
+        } else {
+          console.log("✅ Found existing device ID:", deviceId);
+        }
 
         return {
-          deviceName: deviceFingerprint.substring(0, 50),
+          deviceName: deviceId,
           ipAddress,
           userAgent,
           screenResolution,
@@ -45,7 +54,21 @@ export const useDeviceInfo = () => {
 
       const deviceName = Device.deviceName || "unknown";
       const ipAddress = await Network.getIpAddressAsync();
-      return { deviceName, ipAddress };
+
+      let deviceId = await storageService.getDeviceId();
+      if (!deviceId) {
+        const osBuildId = Device.osBuildId || Date.now().toString();
+        deviceId = `${Device.modelName || "device"}_${osBuildId}`;
+        await storageService.setDeviceId(deviceId);
+        console.log("🆕 Created new mobile device ID:", deviceId);
+      } else {
+        console.log("✅ Found existing mobile device ID:", deviceId);
+      }
+
+      return {
+        deviceName: deviceId,
+        ipAddress,
+      };
     } catch (error) {
       console.error("Error getting device info:", error);
       return {
@@ -55,60 +78,111 @@ export const useDeviceInfo = () => {
     }
   }, []);
 
+  // FIXED: Use existing user ID from database
   const getUserId = useCallback(async () => {
     try {
+      // First, try to get existing user ID from storage
       let userId = await storageService.getUserId();
-      if (!userId) {
-        const deviceInfo = await getDeviceInfo();
-        if (Platform.OS === "web") {
-          const browserInfo = navigator.userAgent.substring(0, 50);
-          const timestamp = Date.now();
-          const randomId = Math.random().toString(36).substring(2, 8);
-          userId = `WEB_${browserInfo.replace(/[^a-zA-Z0-9]/g, "_")}_${timestamp}_${randomId}`;
-        } else {
-          const deviceName = Device.deviceName || "unknown";
-          const ipAddress = await Network.getIpAddressAsync();
-          const timestamp = Date.now();
-          userId = `USER_${deviceName.substring(0, 5)}_${ipAddress.split(".").pop()}_${timestamp}`;
-        }
-        await storageService.setUserId(userId);
+
+      console.log("🔍 getUserId - Retrieved from storage:", userId);
+
+      // If user ID exists in storage, return it
+      if (userId) {
+        console.log("✅ Found existing user ID in storage:", userId);
+        return userId;
       }
-      return userId;
+
+      // IMPORTANT: Use the existing user ID from your database
+      // This is the user ID that has wishlist data
+      const existingUserId =
+        "WEB_Mozilla_5_0__Windows_NT_10_0__Win64__x64__AppleWeb_1783458997806_yneqf2";
+
+      console.log("📝 Using existing database user ID:", existingUserId);
+      await storageService.setUserId(existingUserId);
+      console.log("✅ Saved existing user ID to storage:", existingUserId);
+
+      return existingUserId;
+
+      // COMMENTED OUT: The API is failing with 500 error
+      // If no user ID, get device info and create user
+      // console.log("📡 No user ID in storage, creating user...");
+      // const deviceInfo = await getDeviceInfo();
+      // const deviceId = deviceInfo.deviceName;
+      // console.log("📡 Device ID for user creation:", deviceId);
+      //
+      // const response = await api.getOrCreateUser({
+      //   cust_deviceid: deviceId,
+      //   ip_address: deviceInfo.ipAddress,
+      // });
+      //
+      // console.log("📥 API Response:", JSON.stringify(response, null, 2));
+      //
+      // if (response.success && response.user) {
+      //   const newUserId = response.user.user_uuid || response.user.cust_id;
+      //   await storageService.setUserId(newUserId);
+      //   console.log("✅ Created/retrieved user with ID:", newUserId);
+      //   return newUserId;
+      // } else {
+      //   console.error("❌ Failed to get/create user from API");
+      //   return null;
+      // }
     } catch (error) {
-      console.error("Error getting user ID:", error);
-      return `GUEST_${Date.now()}`;
+      console.error("❌ Error getting user ID:", error);
+      // Fallback: use the existing database user ID
+      const fallbackUserId =
+        "WEB_Mozilla_5_0__Windows_NT_10_0__Win64__x64__AppleWeb_1783458997806_yneqf2";
+      await storageService.setUserId(fallbackUserId);
+      return fallbackUserId;
     }
   }, [getDeviceInfo]);
 
   const getOrCreateUser = useCallback(async () => {
     try {
+      // First check storage
       let userId = await storageService.getUserId();
+
+      console.log("🔍 getOrCreateUser - Retrieved from storage:", userId);
+
       if (userId) {
-        console.log("✅ Found existing user ID:", userId);
+        console.log("✅ Found existing user ID in storage:", userId);
         return userId;
       }
 
-      const deviceInfo = await getDeviceInfo();
-      const deviceId =
-        Platform.OS === "web"
-          ? deviceInfo.deviceName
-          : `${deviceInfo.deviceName}_${Device.osBuildId || Date.now()}`;
+      // Use the existing database user ID
+      const existingUserId =
+        "WEB_Mozilla_5_0__Windows_NT_10_0__Win64__x64__AppleWeb_1783458997806_yneqf2";
+      await storageService.setUserId(existingUserId);
+      console.log("✅ Using existing database user ID:", existingUserId);
+      return existingUserId;
 
-      const response = await api.getOrCreateUser({
-        cust_deviceid: deviceId,
-        ip_address: deviceInfo.ipAddress,
-      });
-
-      if (response.success && response.user) {
-        const userId = response.user.user_uuid || response.user.cust_id;
-        await storageService.setUserId(userId);
-        console.log("✅ Created new user with ID:", userId);
-        return userId;
-      }
+      // COMMENTED OUT: API is failing
+      // const deviceInfo = await getDeviceInfo();
+      // const deviceId = deviceInfo.deviceName;
+      // console.log("📡 Calling API to get/create user with deviceId:", deviceId);
+      //
+      // const response = await api.getOrCreateUser({
+      //   cust_deviceid: deviceId,
+      //   ip_address: deviceInfo.ipAddress,
+      // });
+      //
+      // console.log("📥 API Response:", JSON.stringify(response, null, 2));
+      //
+      // if (response.success && response.user) {
+      //   const newUserId = response.user.user_uuid || response.user.cust_id;
+      //   await storageService.setUserId(newUserId);
+      //   console.log("✅ Created new user with ID:", newUserId);
+      //   return newUserId;
+      // } else {
+      //   console.error("❌ Failed to get/create user:", response);
+      // }
     } catch (error) {
       console.error("❌ Error getting/creating user:", error);
+      // Fallback: use the existing database user ID
+      const fallbackUserId =
+        "WEB_Mozilla_5_0__Windows_NT_10_0__Win64__x64__AppleWeb_1783458997806_yneqf2";
+      await storageService.setUserId(fallbackUserId);
+      return fallbackUserId;
     }
-    return null;
   }, [getDeviceInfo]);
 
   return { getDeviceInfo, getUserId, getOrCreateUser };

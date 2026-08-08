@@ -1,5 +1,4 @@
-// hooks/useCart.ts
-
+// hooks/useCart.ts - FIXED VERSION
 import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { api } from "../services/api";
@@ -39,7 +38,7 @@ export const useCart = () => {
         const response = await api.addToCart({
           cust_id: custId,
           ip_address: ipAddress,
-          cust_deviceid: deviceName,
+          device_id: deviceName,
           productId: parseInt(product.id),
           productName: product.product_name,
           productCategory: product.product_category,
@@ -49,9 +48,11 @@ export const useCart = () => {
         });
 
         if (response.success) {
-          setCartCount((prev) => prev + 1);
+          const newCount = cartCount + 1;
+          setCartCount(newCount);
           eventEmitter.emit(EVENTS.CART_UPDATED);
-          eventEmitter.emit(EVENTS.CART_COUNT_UPDATED);
+          // ✅ FIXED: Pass the new count
+          eventEmitter.emit(EVENTS.CART_COUNT_UPDATED, newCount);
           Alert.alert("Success", `${product.product_name} added to cart!`);
           await fetchCart();
         }
@@ -60,7 +61,7 @@ export const useCart = () => {
         Alert.alert("Error", "Failed to add to cart");
       }
     },
-    [getUserId, getDeviceInfo, fetchCart],
+    [getUserId, getDeviceInfo, fetchCart, cartCount], // ✅ Added cartCount to dependencies
   );
 
   useEffect(() => {
