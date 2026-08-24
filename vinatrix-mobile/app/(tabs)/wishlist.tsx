@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { ThemedText } from "../../components/themed-text";
+import { BASE_URL } from "../../constants/config";
 import { useCart } from "../../hooks/useCart";
 import { useWishlist } from "../../hooks/useWishlist";
 import { useTheme } from "../context/ThemeContext";
@@ -48,8 +49,6 @@ export default function WishlistScreen() {
 
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
-
-  const BASE_URL = "https://api.vinatrix-api.workers.dev";
 
   // Helper function to safely get price as number
   const getPriceAsNumber = (price: number | string | undefined): number => {

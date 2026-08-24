@@ -1,5 +1,4 @@
 // components/common/BuyNowModal.tsx
-
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useTheme } from "../../app/context/ThemeContext";
+import { BASE_URL } from "../../constants/config";
 import { useDeviceInfo } from "../../hooks/useDeviceInfo";
 import { api } from "../../services/api";
 import { PAYMENT_METHODS } from "../../utils/constants";
@@ -89,8 +89,6 @@ export const BuyNowModal: React.FC<BuyNowModalProps> = ({
   const [cardExpiry, setCardExpiry] = useState<string>("");
   const [cardCvv, setCardCvv] = useState<string>("");
   const [cardName, setCardName] = useState<string>("");
-
-  const BASE_URL = "https://api.vinatrix-api.workers.dev";
 
   const fetchAddresses = async (uuid: string): Promise<void> => {
     try {

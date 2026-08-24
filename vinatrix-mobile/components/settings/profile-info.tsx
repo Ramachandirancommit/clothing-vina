@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { BASE_URL } from "../../constants/config";
 
 interface Props {
   goBack?: () => void;
@@ -37,8 +38,6 @@ export default function ProfileInfo({ goBack }: Props) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
-
-  const BASE_URL = "https://api.vinatrix-api.workers.dev";
 
   // Get device info
   const getDeviceInfo = async () => {

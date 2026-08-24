@@ -57,6 +57,7 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "@types/react-native-razorpay": "^2.2.6",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

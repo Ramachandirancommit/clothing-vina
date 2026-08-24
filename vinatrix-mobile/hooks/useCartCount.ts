@@ -3,9 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Network from "expo-network";
 import { useEffect, useState } from "react";
+import { BASE_URL } from "../constants/config";
 import { eventEmitter, EVENTS } from "../utils/eventEmitter";
-
-const BASE_URL = "https://api.vinatrix-api.workers.dev";
 
 // Get or create user (same as in cart.tsx)
 const getOrCreateUser = async (): Promise<string | null> => {

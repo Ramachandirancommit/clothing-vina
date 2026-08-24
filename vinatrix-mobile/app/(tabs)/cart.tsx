@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import RazorpayCheckout from "react-native-razorpay";
 import { ThemedText } from "../../components/themed-text";
+import { BASE_URL, CART_URL } from "../../constants/config"; // path relative to this file
 import { eventEmitter, EVENTS } from "../../utils/eventEmitter";
 import { useTheme } from "../context/ThemeContext";
 
@@ -89,9 +90,6 @@ export default function CartScreen() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-
-  const BASE_URL = "https://api.vinatrix-api.workers.dev";
-  const CART_URL = `${BASE_URL}/api/cart`;
 
   // Razorpay Test Key (replace with your actual test key)
   const RAZORPAY_KEY = "rzp_live_SyeCkmvegychiI";

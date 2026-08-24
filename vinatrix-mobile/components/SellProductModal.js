@@ -14,9 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const BASE_URL = "https://api.vinatrix-api.workers.dev";
-const API_URL = `${BASE_URL}/api/products`;
+import { API_URL } from "../constants/config"; // path relative to this file
 
 const SellProductModal = ({ visible, onClose, onProductAdded }) => {
   const [formData, setFormData] = useState({

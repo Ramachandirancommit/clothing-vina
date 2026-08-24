@@ -15,8 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import { ThemedText } from "../../components/themed-text";
+import { BASE_URL } from "../../constants/config";
 import { eventEmitter } from "../../utils/eventEmitter";
 import { useTheme } from "../context/ThemeContext";
 
@@ -66,7 +66,6 @@ export default function TrackOrdersScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
 
-  const BASE_URL = "https://api.vinatrix-api.workers.dev";
   const ORDERS_URL = `${BASE_URL}/api/orders`;
 
   // =========================
